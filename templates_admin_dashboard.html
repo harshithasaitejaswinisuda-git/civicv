@@ -1,0 +1,322 @@
+{% extends "base.html" %}
+
+{% block title %}Admin Dashboard - CivicVoice{% endblock %}
+
+{% block content %}
+<div class="dashboard admin">
+    <!-- Header -->
+    <header class="header">
+        <h1>⚙️ Admin Panel — {{ session.user_name }}</h1>
+        <a href="/logout" class="btn btn-danger">🔓 Logout</a>
+    </header>
+    
+    <!-- Tabs -->
+    <div class="tabs">
+        <button class="tab-btn active" onclick="switchTab('complaints')">📋 All Complaints</button>
+        <button class="tab-btn" onclick="switchTab('stats')">📊 Statistics</button>
+        <button class="tab-btn" onclick="switchTab('users')">👥 Manage Users</button>
+    </div>
+    
+    <!-- Complaints Tab -->
+    <div id="complaints" class="tab-content active">
+        <div class="filter-bar">
+            <button class="btn btn-small" onclick="loadAdminComplaints()">🔄 Refresh</button>
+            
+            <label>Status:</label>
+            <select id="adminStatusFilter" onchange="loadAdminComplaints()">
+                <option value="All">All</option>
+                <option value="Pending">Pending</option>
+                <option value="In Progress">In Progress</option>
+                <option value="Resolved">Resolved</option>
+            </select>
+            
+            <label>Category:</label>
+            <select id="adminCategoryFilter" onchange="loadAdminComplaints()">
+                <option value="All">All</option>
+                <option value="Roads">Roads</option>
+                <option value="Waste Management">Waste Management</option>
+                <option value="Water Leakage">Water Leakage</option>
+                <option value="Streetlight">Streetlight</option>
+                <option value="Other">Other</option>
+            </select>
+            
+            <input type="text" id="searchInput" placeholder="Search..." onkeyup="loadAdminComplaints()">
+        </div>
+        
+        <div class="status-update">
+            <label>Update Status:</label>
+            <select id="newStatus">
+                <option value="Pending">Pending</option>
+                <option value="In Progress">In Progress</option>
+                <option value="Resolved">Resolved</option>
+            </select>
+            <button class="btn btn-success" onclick="updateComplaintStatus()">✅ Update</button>
+        </div>
+        
+        <table class="complaints-table">
+            <thead>
+                <tr>
+                    <th><input type="checkbox" id="selectAllCheckbox" onchange="toggleSelectAll()"></th>
+                    <th>ID</th>
+                    <th>User Email</th>
+                    <th>Title</th>
+                    <th>Category</th>
+                    <th>Location</th>
+                    <th>Status</th>
+                    <th>Priority</th>
+                    <th>Date</th>
+                </tr>
+            </thead>
+            <tbody id="adminComplaintsTableBody">
+            </tbody>
+        </table>
+    </div>
+    
+    <!-- Statistics Tab -->
+    <div id="stats" class="tab-content">
+        <button class="btn btn-small" onclick="loadStats()">🔄 Refresh Charts</button>
+        <div class="charts-container">
+            <div class="chart-wrapper">
+                <canvas id="statusChart"></canvas>
+            </div>
+            <div class="chart-wrapper">
+                <canvas id="categoryChart"></canvas>
+            </div>
+            <div class="chart-wrapper">
+                <canvas id="priorityChart"></canvas>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Users Tab -->
+    <div id="users" class="tab-content">
+        <button class="btn btn-small" onclick="loadUsers()">🔄 Refresh</button>
+        
+        <table class="users-table">
+            <thead>
+                <tr>
+                    <th>ID</th>
+                    <th>Name</th>
+                    <th>Email</th>
+                    <th>Phone</th>
+                    <th>Role</th>
+                    <th>Joined</th>
+                    <th>Action</th>
+                </tr>
+            </thead>
+            <tbody id="usersTableBody">
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<script>
+let selectedComplaintsIds = new Set();
+let statusChart, categoryChart, priorityChart;
+
+function switchTab(tab) {
+    document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
+    document.querySelectorAll('.tab-btn').forEach(el => el.classList.remove('active'));
+    document.getElementById(tab).classList.add('active');
+    event.target.classList.add('active');
+    
+    if (tab === 'stats') {
+        loadStats();
+    } else if (tab === 'users') {
+        loadUsers();
+    }
+}
+
+async function loadAdminComplaints() {
+    const status = document.getElementById('adminStatusFilter').value;
+    const category = document.getElementById('adminCategoryFilter').value;
+    const search = document.getElementById('searchInput').value;
+    
+    try {
+        const response = await fetch(`/api/admin/complaints?status=${status}&category=${category}&search=${search}`);
+        const complaints = await response.json();
+        
+        const tbody = document.getElementById('adminComplaintsTableBody');
+        tbody.innerHTML = '';
+        
+        complaints.forEach(c => {
+            const row = `<tr>
+                <td><input type="checkbox" class="complaint-checkbox" value="${c.id}" onchange="updateSelectedComplaints()"></td>
+                <td>${c.id}</td>
+                <td>${c.user_email}</td>
+                <td>${c.title.substring(0, 30)}</td>
+                <td>${c.category}</td>
+                <td>${c.location || ''}</td>
+                <td><span class="status-badge ${c.status.toLowerCase()}">${c.status}</span></td>
+                <td>${c.priority}</td>
+                <td>${c.created_at.substring(0, 10)}</td>
+            </tr>`;
+            tbody.innerHTML += row;
+        });
+    } catch (error) {
+        alert('Error loading complaints: ' + error);
+    }
+}
+
+function updateSelectedComplaints() {
+    selectedComplaintsIds.clear();
+    document.querySelectorAll('.complaint-checkbox:checked').forEach(cb => {
+        selectedComplaintsIds.add(parseInt(cb.value));
+    });
+}
+
+function toggleSelectAll() {
+    const isChecked = document.getElementById('selectAllCheckbox').checked;
+    document.querySelectorAll('.complaint-checkbox').forEach(cb => {
+        cb.checked = isChecked;
+    });
+    updateSelectedComplaints();
+}
+
+async function updateComplaintStatus() {
+    if (selectedComplaintsIds.size === 0) {
+        alert('Select at least one complaint');
+        return;
+    }
+    
+    const newStatus = document.getElementById('newStatus').value;
+    
+    for (const id of selectedComplaintsIds) {
+        try {
+            const response = await fetch(`/api/admin/complaints/${id}/status`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ status: newStatus })
+            });
+            const data = await response.json();
+            if (!data.success) {
+                alert('Error updating complaint ' + id);
+                return;
+            }
+        } catch (error) {
+            alert('Error: ' + error);
+            return;
+        }
+    }
+    
+    alert('Status updated successfully!');
+    loadAdminComplaints();
+}
+
+async function loadStats() {
+    try {
+        const response = await fetch('/api/admin/stats');
+        const stats = await response.json();
+        
+        drawCharts(stats);
+    } catch (error) {
+        alert('Error loading stats: ' + error);
+    }
+}
+
+function drawCharts(stats) {
+    const statusCtx = document.getElementById('statusChart').getContext('2d');
+    const categoryCtx = document.getElementById('categoryChart').getContext('2d');
+    const priorityCtx = document.getElementById('priorityChart').getContext('2d');
+    
+    if (statusChart) statusChart.destroy();
+    if (categoryChart) categoryChart.destroy();
+    if (priorityChart) priorityChart.destroy();
+    
+    statusChart = new Chart(statusCtx, {
+        type: 'bar',
+        data: {
+            labels: Object.keys(stats.status),
+            datasets: [{
+                label: 'Complaints by Status',
+                data: Object.values(stats.status),
+                backgroundColor: ['#FF6B6B', '#4ECDC4', '#45B7D1']
+            }]
+        },
+        options: {
+            responsive: true,
+            plugins: { legend: { labels: { color: '#fff' } } },
+            scales: { y: { ticks: { color: '#fff' } } }
+        }
+    });
+    
+    categoryChart = new Chart(categoryCtx, {
+        type: 'pie',
+        data: {
+            labels: Object.keys(stats.category),
+            datasets: [{
+                data: Object.values(stats.category),
+                backgroundColor: ['#E91E63', '#9C27B0', '#3F51B5', '#00BCD4', '#4CAF50']
+            }]
+        },
+        options: {
+            responsive: true,
+            plugins: { legend: { labels: { color: '#fff' } } }
+        }
+    });
+    
+    priorityChart = new Chart(priorityCtx, {
+        type: 'bar',
+        data: {
+            labels: Object.keys(stats.priority),
+            datasets: [{
+                label: 'Complaints by Priority',
+                data: Object.values(stats.priority),
+                backgroundColor: ['#FF9800', '#2196F3', '#F44336', '#4CAF50']
+            }]
+        },
+        options: {
+            indexAxis: 'y',
+            responsive: true,
+            plugins: { legend: { labels: { color: '#fff' } } },
+            scales: { x: { ticks: { color: '#fff' } } }
+        }
+    });
+}
+
+async function loadUsers() {
+    try {
+        const response = await fetch('/api/admin/users');
+        const users = await response.json();
+        
+        const tbody = document.getElementById('usersTableBody');
+        tbody.innerHTML = '';
+        
+        users.forEach(u => {
+            const row = `<tr>
+                <td>${u.id}</td>
+                <td>${u.name}</td>
+                <td>${u.email}</td>
+                <td>${u.phone || ''}</td>
+                <td><span class="role-badge ${u.role}">${u.role}</span></td>
+                <td>${u.created_at.substring(0, 10)}</td>
+                <td><button class="btn btn-danger btn-small" onclick="deleteUser('${u.email}')">Delete</button></td>
+            </tr>`;
+            tbody.innerHTML += row;
+        });
+    } catch (error) {
+        alert('Error loading users: ' + error);
+    }
+}
+
+async function deleteUser(email) {
+    if (!confirm(`Delete user ${email}?`)) return;
+    
+    try {
+        const response = await fetch(`/api/admin/users/${email}`, { method: 'DELETE' });
+        const data = await response.json();
+        
+        if (data.success) {
+            alert(data.message);
+            loadUsers();
+        } else {
+            alert('Error: ' + data.message);
+        }
+    } catch (error) {
+        alert('Error: ' + error);
+    }
+}
+
+loadAdminComplaints();
+</script>
+{% endblock %}

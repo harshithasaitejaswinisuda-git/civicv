@@ -1,0 +1,197 @@
+{% extends "base.html" %}
+
+{% block title %}User Dashboard - CivicVoice{% endblock %}
+
+{% block content %}
+<div class="dashboard">
+    <!-- Header -->
+    <header class="header">
+        <div class="header-left">
+            <h1>🔔 CIVICVOICE</h1>
+            <p>Welcome, <strong id="userName">{{ session.user_name }}</strong></p>
+        </div>
+        <a href="/logout" class="btn btn-danger">🔓 Logout</a>
+    </header>
+    
+    <!-- Tabs -->
+    <div class="tabs">
+        <button class="tab-btn active" onclick="switchTab('submit')">📝 Submit Complaint</button>
+        <button class="tab-btn" onclick="switchTab('view')">📋 My Complaints</button>
+    </div>
+    
+    <!-- Submit Tab -->
+    <div id="submit" class="tab-content active">
+        <div class="form-container">
+            <form id="complaintForm">
+                <div class="form-row">
+                    <div class="form-group full">
+                        <label for="title">📌 Title</label>
+                        <input type="text" id="title" name="title" required placeholder="Complaint title" minlength="5">
+                    </div>
+                </div>
+                
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="location">📍 Location</label>
+                        <input type="text" id="location" name="location" required placeholder="Location/Address">
+                    </div>
+                    <div class="form-group">
+                        <label for="category">📂 Category</label>
+                        <select id="category" name="category" required>
+                            <option value="">Select Category</option>
+                            <option value="Roads">Roads</option>
+                            <option value="Waste Management">Waste Management</option>
+                            <option value="Water Leakage">Water Leakage</option>
+                            <option value="Streetlight">Streetlight</option>
+                            <option value="Other">Other</option>
+                        </select>
+                    </div>
+                </div>
+                
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="priority">⚡ Priority</label>
+                        <select id="priority" name="priority" required>
+                            <option value="Normal">Normal</option>
+                            <option value="Low">Low</option>
+                            <option value="High">High</option>
+                            <option value="Critical">Critical</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="image">📸 Upload Image</label>
+                        <input type="file" id="image" name="image" accept="image/*">
+                    </div>
+                </div>
+                
+                <div class="form-group full">
+                    <label for="description">📝 Description</label>
+                    <textarea id="description" name="description" required placeholder="Detailed description" minlength="10" rows="5"></textarea>
+                </div>
+                
+                <button type="submit" class="btn btn-success full">✅ SUBMIT COMPLAINT</button>
+            </form>
+        </div>
+    </div>
+    
+    <!-- View Tab -->
+    <div id="view" class="tab-content">
+        <div class="filter-bar">
+            <button class="btn btn-small" onclick="loadComplaints()">🔄 Refresh</button>
+            
+            <label>Status:</label>
+            <select id="statusFilter" onchange="loadComplaints()">
+                <option value="All">All</option>
+                <option value="Pending">Pending</option>
+                <option value="In Progress">In Progress</option>
+                <option value="Resolved">Resolved</option>
+            </select>
+            
+            <label>Category:</label>
+            <select id="categoryFilter" onchange="loadComplaints()">
+                <option value="All">All</option>
+                <option value="Roads">Roads</option>
+                <option value="Waste Management">Waste Management</option>
+                <option value="Water Leakage">Water Leakage</option>
+                <option value="Streetlight">Streetlight</option>
+                <option value="Other">Other</option>
+            </select>
+        </div>
+        
+        <table class="complaints-table">
+            <thead>
+                <tr>
+                    <th>ID</th>
+                    <th>Title</th>
+                    <th>Category</th>
+                    <th>Location</th>
+                    <th>Status</th>
+                    <th>Priority</th>
+                    <th>Image</th>
+                    <th>Date</th>
+                </tr>
+            </thead>
+            <tbody id="complaintsTableBody">
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<script>
+function switchTab(tab) {
+    document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
+    document.querySelectorAll('.tab-btn').forEach(el => el.classList.remove('active'));
+    document.getElementById(tab).classList.add('active');
+    event.target.classList.add('active');
+    
+    if (tab === 'view') {
+        loadComplaints();
+    }
+}
+
+async function loadComplaints() {
+    const status = document.getElementById('statusFilter').value;
+    const category = document.getElementById('categoryFilter').value;
+    
+    try {
+        const response = await fetch(`/api/complaints?status=${status}&category=${category}`);
+        const complaints = await response.json();
+        
+        const tbody = document.getElementById('complaintsTableBody');
+        tbody.innerHTML = '';
+        
+        complaints.forEach(c => {
+            const row = `<tr>
+                <td>${c.id}</td>
+                <td>${c.title.substring(0, 35)}</td>
+                <td>${c.category}</td>
+                <td>${c.location || ''}</td>
+                <td><span class="status-badge ${c.status.toLowerCase()}">${c.status}</span></td>
+                <td>${c.priority}</td>
+                <td>${c.image_path ? '✅' : '❌'}</td>
+                <td>${c.created_at.substring(0, 10)}</td>
+            </tr>`;
+            tbody.innerHTML += row;
+        });
+    } catch (error) {
+        alert('Error loading complaints: ' + error);
+    }
+}
+
+document.getElementById('complaintForm').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    
+    const formData = new FormData();
+    formData.append('title', document.getElementById('title').value);
+    formData.append('description', document.getElementById('description').value);
+    formData.append('category', document.getElementById('category').value);
+    formData.append('location', document.getElementById('location').value);
+    formData.append('priority', document.getElementById('priority').value);
+    
+    const imageFile = document.getElementById('image').files[0];
+    if (imageFile) {
+        formData.append('image', imageFile);
+    }
+    
+    try {
+        const response = await fetch('/api/complaints', {
+            method: 'POST',
+            body: formData
+        });
+        
+        const data = await response.json();
+        
+        if (data.success) {
+            alert(data.message);
+            document.getElementById('complaintForm').reset();
+        } else {
+            alert('Error: ' + data.message);
+        }
+    } catch (error) {
+        alert('Error: ' + error);
+    }
+});
+
+loadComplaints();
+</script>
+{% endblock %}

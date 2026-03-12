@@ -1,0 +1,92 @@
+{% extends "base.html" %}
+
+{% block title %}Register - CivicVoice{% endblock %}
+
+{% block content %}
+<div class="auth-container">
+    <div class="auth-box">
+        <h1>✍️ CREATE ACCOUNT</h1>
+        <p class="subtitle">CivicVoice - Civic Issue Reporting System</p>
+        
+        <form id="registerForm">
+            <div class="form-group">
+                <label for="name">👤 Full Name</label>
+                <input type="text" id="name" name="name" required placeholder="Enter full name" minlength="2">
+            </div>
+            
+            <div class="form-group">
+                <label for="email">📧 Email</label>
+                <input type="email" id="email" name="email" required placeholder="Enter email">
+            </div>
+            
+            <div class="form-group">
+                <label for="phone">📱 Phone</label>
+                <input type="tel" id="phone" name="phone" required placeholder="+91XXXXXXXXXX">
+            </div>
+            
+            <div class="form-group">
+                <label for="password">🔐 Password</label>
+                <p class="hint">Min 8 chars: 1 upper, 1 lower, 1 digit, 1 special</p>
+                <input type="password" id="password" name="password" required placeholder="Enter strong password">
+            </div>
+            
+            <div class="form-group">
+                <label for="role">👥 Role</label>
+                <select id="role" name="role">
+                    <option value="user">User</option>
+                    <option value="admin">Admin</option>
+                </select>
+            </div>
+            
+            <div class="form-group" id="adminPasswordGroup" style="display:none;">
+                <label for="adminPassword">🔑 Admin Password</label>
+                <input type="password" id="adminPassword" name="adminPassword" placeholder="Enter admin password">
+            </div>
+            
+            <button type="submit" class="btn btn-success">REGISTER</button>
+        </form>
+        
+        <p class="auth-link">Already have an account? <a href="{{ url_for('login') }}">Login here</a></p>
+    </div>
+</div>
+
+<script>
+document.getElementById('role').addEventListener('change', (e) => {
+    const adminGroup = document.getElementById('adminPasswordGroup');
+    adminGroup.style.display = e.target.value === 'admin' ? 'block' : 'none';
+});
+
+document.getElementById('registerForm').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    
+    const name = document.getElementById('name').value;
+    const email = document.getElementById('email').value;
+    const phone = document.getElementById('phone').value;
+    const password = document.getElementById('password').value;
+    const role = document.getElementById('role').value;
+    const admin_password = document.getElementById('adminPassword').value;
+    
+    try {
+        const response = await fetch('/register', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                name, email, phone, password, role,
+                admin_password: role === 'admin' ? admin_password : ''
+            })
+        });
+        
+        const data = await response.json();
+        
+        if (data.success) {
+            alert(data.message);
+            window.location.href = '/login';
+        } else {
+            alert('Error: ' + data.message);
+        }
+    } catch (error) {
+        alert('Error: ' + error);
+    }
+});
+</script>
+{% endblock %}
